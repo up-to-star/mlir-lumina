@@ -1,3 +1,5 @@
+#include <set>
+
 #include "Dialect/Lumina/IR/LuminaDialect.h"
 #include "Dialect/Lumina/IR/LuminaTypes.h"
 #include "llvm/Support/raw_ostream.h"
@@ -77,5 +79,19 @@ void LMTensorType::print(::mlir::AsmPrinter& printer) const {
     printer << ",";
     printer << getDeviceId();
     printer << ">";
+}
+
+llvm::LogicalResult BufferType::verify(
+    ::llvm::function_ref< ::mlir::InFlightDiagnostic()> emitError,
+    ::llvm::ArrayRef<int64_t> devices) {
+    if (std::set(devices.begin(), devices.end()).size() != devices.size()) {
+        return emitError() << "Duplicate device ids";
+    }
+    for (auto id : devices) {
+        if (id < 0) {
+            return emitError() << "Invalid device id";
+        }
+    }
+    return llvm::success();
 }
 }  // namespace mlir::lumina

@@ -8,6 +8,7 @@ void LuminaDialect::initialize() {
                  << this->getDialectNamespace() << "\n";
     registerType();
     registerAttrs();
+    registerOps();
 }
 
 LuminaDialect::~LuminaDialect() {

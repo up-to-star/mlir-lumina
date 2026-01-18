@@ -60,3 +60,23 @@ def Lumina_TensorType : LuminaType<"LMTensor", "lm_tensor", []> {
     // }];
 
 }
+
+def Lumina_BufferType : LuminaType<"Buffer", "buffer", []> {
+    let summary = "Lumina Buffer Type";
+
+    let description = "defines a buffer type";
+
+    let parameters = (ins
+        ArrayRefParameter<"int64_t">: $devices
+    );
+
+    let genStorageClass = 1;
+
+    let hasStorageCustomConstructor = 0;
+
+    let assemblyFormat = "`<`$devices`>`";
+
+    let skipDefaultBuilders = 0;
+
+    let genVerifyDecl = 1;
+}
