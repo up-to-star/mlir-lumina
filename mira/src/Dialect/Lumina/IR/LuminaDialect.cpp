@@ -7,6 +7,7 @@ void LuminaDialect::initialize() {
     llvm::outs() << "Initializing Lumina dialect\n"
                  << this->getDialectNamespace() << "\n";
     registerType();
+    registerAttrs();
 }
 
 LuminaDialect::~LuminaDialect() {

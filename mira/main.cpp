@@ -1,11 +1,16 @@
 #include <iostream>
 #include <memory>
 #include "Dialect/Lumina/IR/LuminaDialect.h"
+#include "Dialect/Lumina/IR/LuminaEnums.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "Dialect/Lumina/IR/LuminaTypes.h"
+#include "Dialect/Lumina/IR/LuminaAttrs.h"
 
 void test_dialect() {
     mlir::DialectRegistry registry;
@@ -126,6 +131,79 @@ void test_mytypes() {
     dy_lm_tensor.dump();
 }
 
+void test_builtin_attr() {
+    auto context = std::make_unique<mlir::MLIRContext>();
+    context->getOrLoadDialect<mlir::lumina::LuminaDialect>();
+
+    // float attr
+    auto f32_attr =
+        mlir::FloatAttr::get(mlir::Float32Type::get(context.get()), 2);
+    llvm::outs() << "F32 属性 :\t";
+    f32_attr.dump();
+
+    // integer attr
+    auto i32_attr =
+        mlir::IntegerAttr::get(mlir::IntegerType::get(context.get(), 32), 10);
+    llvm::outs() << "I32 属性 :\t";
+    i32_attr.dump();
+
+    // stridelayout attr
+    auto stride_layout_attr =
+        mlir::StridedLayoutAttr::get(context.get(), 1, {6, 3, 1});
+    llvm::outs() << "StrideLayout 属性 :\t";
+    stride_layout_attr.dump();
+
+    // string attr
+    auto str_attr = mlir::StringAttr::get(context.get(), "hello MLIR!");
+    llvm::outs() << "String 属性 :\t";
+    str_attr.dump();
+
+    // strref attr 符号 attribute
+    auto str_ref_attr = mlir::SymbolRefAttr::get(str_attr);
+    llvm::outs() << "SymbolRef 属性 :\t";
+    str_ref_attr.dump();
+
+    // type attr
+    auto type_attr = mlir::TypeAttr::get(mlir::lumina::LMTensorType::get(
+        context.get(), {1, 2, 3}, mlir::Float32Type::get(context.get())));
+    llvm::outs() << "Type 属性 :\t";
+    type_attr.dump();
+
+    // unit attr
+    auto unit_attr = mlir::UnitAttr::get(context.get());
+    llvm::outs() << "Unit 属性 :\t";
+    unit_attr.dump();
+
+    // dense element attr
+    auto i64_arr = mlir::DenseI64ArrayAttr::get(context.get(), {1, 2, 3});
+    llvm::outs() << "I64 数组属性 :\t";
+    i64_arr.dump();
+
+    auto dense_attr = mlir::DenseElementsAttr::get(
+        mlir::RankedTensorType::get({2, 2},
+                                    mlir::Float32Type::get(context.get())),
+        llvm::ArrayRef<float>{1, 2, 3, 4});
+    llvm::outs() << "Dense 属性 :\t";
+    dense_attr.dump();
+}
+
+void test_myattrs() {
+    mlir::DialectRegistry registry;
+    mlir::MLIRContext context(registry);
+    auto dialect = context.getOrLoadDialect<mlir::lumina::LuminaDialect>();
+    auto nchw = mlir::lumina::Layout::NCHW;
+    llvm::outs() << "NCHW: " << mlir::lumina::stringifyLayout(nchw) << "\n";
+    auto nchw_attr = mlir::lumina::LayoutAttr::get(&context, nchw);
+    llvm::outs() << "NCHW 属性 :\t";
+    nchw_attr.dump();
+    llvm::outs() << "NCHW is channelLast: " << nchw_attr.isChannelLast()
+                 << "\n";
+
+    auto dp_attr = mlir::lumina::DataParallelismAttr::get(&context, 2);
+    llvm::outs() << "DataParallelism 属性 :\t";
+    dp_attr.dump();
+}
+
 int main() {
     std::cout << "testing dialect" << std::endl;
     test_dialect();
@@ -135,6 +213,12 @@ int main() {
     std::cout << "----------------------------------" << std::endl;
     std::cout << "testing my types" << std::endl;
     test_mytypes();
+    std::cout << "----------------------------------" << std::endl;
+    std::cout << "testing builtin attr" << std::endl;
+    test_builtin_attr();
+    std::cout << "----------------------------------" << std::endl;
+    std::cout << "testing my attr" << std::endl;
+    test_myattrs();
     std::cout << "----------------------------------" << std::endl;
     return 0;
 }
