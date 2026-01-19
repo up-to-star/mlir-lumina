@@ -9,7 +9,7 @@ class Lumina_Op<string mnemonic, list<Trait> traits = []>
 }
 
 class Lumina_UnaryOp<string mnemonic, Type OperandType, Type resultType = OperandType, list<Trait> traits = [], dag attributes = (ins)> : 
-    Lumina_Op<mnemonic, traits#[]> {
+    Lumina_Op<mnemonic,[DeclareOpInterfaceMethods<DistributeParallelOp>] # traits> {
     let arguments = !con((ins
         OperandType: $input),
         attributes
@@ -20,7 +20,7 @@ class Lumina_UnaryOp<string mnemonic, Type OperandType, Type resultType = Operan
 }
 
 class Lumina_BinaryOp<string mnemonic, Type OperandType, Type resultType = OperandType, list<Trait> traits = [], dag attributes = (ins)> :
-    Lumina_Op<mnemonic, traits#[]> {
+    Lumina_Op<mnemonic, [DeclareOpInterfaceMethods<DistributeParallelOp>] # traits> {
     let arguments = !con((ins
         OperandType: $lhs,
         OperandType: $rhs),
@@ -30,6 +30,12 @@ class Lumina_BinaryOp<string mnemonic, Type OperandType, Type resultType = Opera
         resultType: $result);
 }
 
+class Lumina_ElewiseUnaryOp<string mnemonic, Type OperandType, Type resultType = OperandType, list<Trait> traits = [], dag attributes = (ins)> :
+    Lumina_UnaryOp<mnemonic, OperandType, resultType, [DeclareOpInterfaceMethods<SupportedDataParallelismOp>] # traits, attributes>;
+
+class Lumina_ElewiseBinaryOp<string mnemonic, Type OperandType, Type resultType = OperandType, list<Trait> traits = [], dag attributes = (ins)> :
+    Lumina_BinaryOp<mnemonic, OperandType, resultType, [DeclareOpInterfaceMethods<SupportedDataParallelismOp>] # traits, attributes>;
+
 def Lumina_ConstOp : Lumina_Op<"const", []> {
     let arguments = (ins
         ElementsAttr: $value);
@@ -38,7 +44,8 @@ def Lumina_ConstOp : Lumina_Op<"const", []> {
         AnyLMTensor: $result);
 }
 
-def Lumina_SoftmaxOp : Lumina_UnaryOp<"softmax", AnyLMTensor, AnyLMTensor, [], (ins I64Attr: $axis)> {
+def Lumina_SoftmaxOp : Lumina_UnaryOp<"softmax", AnyLMTensor, AnyLMTensor, 
+                    [DeclareOpInterfaceMethods<SupportedDataParallelismOp, ["applyDataParallelism", "supportedDataParallelism"]>], (ins I64Attr: $axis)> {
     let hasVerifier = 1;
 
     let builders = [
@@ -51,7 +58,7 @@ def Lumina_SoftmaxOp : Lumina_UnaryOp<"softmax", AnyLMTensor, AnyLMTensor, [], (
     ];
 }
 
-def Lumina_ExpOp : Lumina_UnaryOp<"exp", AnyLMTensor> {
+def Lumina_ExpOp : Lumina_ElewiseUnaryOp<"exp", AnyLMTensor> {
     let builders = [
         OpBuilder<(ins "::mlir::Value": $input), [{
             $_state.addOperands(input);
@@ -60,10 +67,10 @@ def Lumina_ExpOp : Lumina_UnaryOp<"exp", AnyLMTensor> {
     ];
 }
 
-def Lumina_AddOp : Lumina_BinaryOp<"add", AnyLMTensor>;
-def Lumina_SubOp : Lumina_BinaryOp<"sub", AnyLMTensor>;
-def Lumina_MulOp : Lumina_BinaryOp<"mul", AnyLMTensor>;
-def Lumina_DivOp : Lumina_BinaryOp<"div", AnyLMTensor>;
+def Lumina_AddOp : Lumina_ElewiseBinaryOp<"add", AnyLMTensor>;
+def Lumina_SubOp : Lumina_ElewiseBinaryOp<"sub", AnyLMTensor>;
+def Lumina_MulOp : Lumina_ElewiseBinaryOp<"mul", AnyLMTensor>;
+def Lumina_DivOp : Lumina_ElewiseBinaryOp<"div", AnyLMTensor>;
 
 def Lumina_AllToAllOp : Lumina_Op<"all_to_all", []> {
     let arguments = (ins
@@ -93,6 +100,16 @@ def Lumina_BufferOp : Lumina_Op<"buffer", []> {
             $_state.addTypes(::mlir::lumina::BufferType::get($_state.getContext(), devices));
         }]>
     ];
+}
+
+def Lumina_BufferCastOp : Lumina_Op<"buffer_cast", []> {
+    let description = "对数据切分的标记";
+    let arguments = (ins
+       Variadic<LMTensorOrBuffer>: $inputs,
+       DistributeParallelAttr: $distribute_attr);
+    let results = (outs
+        Variadic<LMTensorOrBuffer>: $outputs);
+    let hasVerifier = 1;
 }
 
 def Lumina_GetTensorOp : Lumina_Op<"get_tensor", []> {

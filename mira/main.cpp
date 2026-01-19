@@ -2,21 +2,29 @@
 #include <memory>
 #include "Dialect/Lumina/IR/LuminaDialect.h"
 #include "Dialect/Lumina/IR/LuminaEnums.h"
+#include "Interfaces/DistributeParallelismInterfaces.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/Support/Casting.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/Block.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "Dialect/Lumina/IR/LuminaTypes.h"
 #include "Dialect/Lumina/IR/LuminaAttrs.h"
 #include "Dialect/Lumina/IR/LuminaOps.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
+
+static const char* const KEntryPoint = "main";
+static const char* const KDPAttrName = "dp_attr";
 
 void test_dialect() {
     mlir::DialectRegistry registry;
@@ -278,6 +286,86 @@ void test_ops() {
     all_to_all_op->dump();
 }
 
+mlir::ModuleOp getModule(mlir::OpBuilder& builder) {
+    auto loc = builder.getUnknownLoc();
+    auto context = builder.getContext();
+    auto module = builder.create<mlir::ModuleOp>(loc, "Lumina");
+
+    builder.setInsertionPointToStart(module.getBody());
+    auto f32 = mlir::Float32Type::get(context);
+    auto dy_dim = 128;
+    auto dy_shape = mlir::SmallVector<int64_t>({dy_dim, dy_dim, 24});
+    auto dy_tensor_type =
+        mlir::lumina::LMTensorType::get(context, dy_shape, f32, 0);
+    auto func_type =
+        mlir::FunctionType::get(context, {dy_tensor_type}, {dy_tensor_type});
+    auto func = builder.create<mlir::func::FuncOp>(loc, KEntryPoint, func_type);
+    func->setAttr(KDPAttrName,
+                  mlir::lumina::DataParallelismAttr::get(context, 2));
+
+    auto block = func.addEntryBlock();
+    builder.setInsertionPointToStart(block);
+    // Softmax Op
+    mlir::Value softmax_op =
+        builder.create<mlir::lumina::SoftmaxOp>(loc, block->getArgument(0), 1);
+    softmax_op = builder.create<mlir::lumina::SoftmaxOp>(loc, softmax_op, 1);
+    builder.create<mlir::func::ReturnOp>(loc, mlir::ValueRange{softmax_op});
+    return module;
+}
+
+void test_interface() {
+    mlir::DialectRegistry registry;
+    mlir::MLIRContext context(registry);
+    context.getOrLoadDialect<mlir::lumina::LuminaDialect>();
+    context.getOrLoadDialect<mlir::func::FuncDialect>();
+    auto f32 = mlir::Float32Type::get(&context);
+    auto dim = mlir::ShapedType::kDynamic;
+    auto shape = mlir::SmallVector<int64_t>({dim, dim, 24});
+    auto tensor_type = mlir::lumina::LMTensorType::get(&context, shape, f32, 0);
+    auto shaped_type = mlir::cast<mlir::ShapedType>(tensor_type);
+    llvm::outs() << "tensor type: \t";
+    tensor_type.dump();
+    llvm::outs() << "shaped type: \t";
+    shaped_type.dump();
+    auto cloned_type = shaped_type.clone(f32);
+    llvm::outs() << "cloned type: \t";
+    cloned_type.dump();
+
+    auto dp_attr = mlir::lumina::DataParallelismAttr::get(&context, 2);
+    llvm::outs() << dp_attr.getAbstractAttribute().getName()
+                 << " has mlir::DataParallelAttr interface: "
+                 << dp_attr.getAbstractAttribute().hasInterface(
+                        mlir::DistributeParallelAttr::getInterfaceID())
+                 << "\n";
+    llvm::outs()
+        << dp_attr.getAbstractAttribute().getName()
+        << " has mlir::DataParallelAttr interface: "
+        << dp_attr.hasPromiseOrImplementsInterface<mlir::DataParallelAttr>()
+        << "\n";
+    mlir::OpBuilder builder(&context);
+    auto loc = builder.getUnknownLoc();
+    auto module = getModule(builder);
+    module.dump();
+    module.walk([](mlir::func::FuncOp func) {
+        if (auto dp_attr = llvm::dyn_cast_or_null<mlir::DistributeParallelAttr>(
+                func->getAttr(KDPAttrName))) {
+            func.walk([&](mlir::Operation* op) {
+                if (auto dis_op =
+                        llvm::dyn_cast_or_null<mlir::DistributeParallelOp>(
+                            op)) {
+                    if (dis_op.applyDistributeParallelism(dp_attr)
+                            .succeeded()) {
+                        llvm::outs() << "Apply DataParallelism to "
+                                     << op->getName() << "\n";
+                        op->erase();
+                    }
+                }
+            });
+        }
+    });
+    module->dump();
+}
+
 int main() {
     std::cout << "testing dialect" << std::endl;
     test_dialect();
@@ -296,6 +384,9 @@ int main() {
     std::cout << "----------------------------------" << std::endl;
     std::cout << "testing ops" << std::endl;
     test_ops();
+    std::cout << "----------------------------------" << std::endl;
+    std::cout << "testing interface" << std::endl;
+    test_interface();
     std::cout << "----------------------------------" << std::endl;
     return 0;
 }

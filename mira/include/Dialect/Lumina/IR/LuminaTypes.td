@@ -11,7 +11,7 @@ class LuminaType<string name, string typeMnemonic, list<Trait> traits = [], stri
         let typeName = dialect.name # "." # typeMnemonic;
      }
 
-def Lumina_TensorType : LuminaType<"LMTensor", "lm_tensor", []> {
+def Lumina_TensorType : LuminaType<"LMTensor", "lm_tensor", [ShapedTypeInterface], "::mlir::TensorType"> {
     let summary = "Lumina Tensor Type";
 
     let description = "defines a tensor type with a given element type and shape and card_id";
@@ -41,23 +41,43 @@ def Lumina_TensorType : LuminaType<"LMTensor", "lm_tensor", []> {
 
     let genVerifyDecl = 1;
 
-    // let extraClassDeclaration = [{
-    //     mlir::ShapedType cloneWith(std::optional<llvm::ArrayRef<int64_t>> shape, mlir::Type type);
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::getElementTypeBitWidth;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::getRank;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::getNumElements;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::isDynamicDim;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::hasStaticShape;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::getNumDynamicDims;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::getDimSize;
-    //     using ::mlir::ShapedType::Trait<LMTensorType>::getDynamicDimIndex;
+    let extraClassDeclaration = [{
+        using ::mlir::ShapedType::Trait<LMTensorType>::getElementTypeBitWidth;
+        using ::mlir::ShapedType::Trait<LMTensorType>::getRank;
+        using ::mlir::ShapedType::Trait<LMTensorType>::getNumElements;
+        using ::mlir::ShapedType::Trait<LMTensorType>::isDynamicDim;
+        using ::mlir::ShapedType::Trait<LMTensorType>::hasStaticShape;
+        using ::mlir::ShapedType::Trait<LMTensorType>::getNumDynamicDims;
+        using ::mlir::ShapedType::Trait<LMTensorType>::getDimSize;
+        using ::mlir::ShapedType::Trait<LMTensorType>::getDynamicDimIndex;
 
-    //     LMTensorType clone(::mlir::ArrayRef<int64_t> shape, int64_t device_id) const;
-    //     LMTensorType clone(::mlir::ArrayRef<int64_t> shape, ::mlir::Type elementType) const;
-    //     LMTensorType clone(::mlir::ArrayRef<int64_t> shape) const;
-    //     LMTensorType clone(::mlir::Type elementType) const;
-    //     LMTensorType clone() const;
-    // }];
+        ::mlir::ShapedType cloneWith(::std::optional<::llvm::ArrayRef<int64_t>> shape, ::mlir::Type type) {
+            if (shape) {
+                return mlir::lumina::LMTensorType::get(getContext(), *shape, type);
+            }
+            return mlir::lumina::LMTensorType::get(getContext(), getShape(), type);
+        }
+
+        LMTensorType clone(::mlir::ArrayRef<int64_t> shape, int64_t device_id) const {
+            return ::mlir::lumina::LMTensorType::get(getContext(), shape, getElementType(), device_id);
+        }
+
+        LMTensorType clone(::mlir::ArrayRef<int64_t> shape, ::mlir::Type elementType) const {
+            return ::mlir::lumina::LMTensorType::get(getContext(), shape, elementType, getDeviceId());
+        }
+
+        LMTensorType clone(::mlir::ArrayRef<int64_t> shape) const {
+            return ::mlir::lumina::LMTensorType::get(getContext(), shape, getElementType(), getDeviceId());
+        }
+
+        LMTensorType clone(::mlir::Type elementType) const {
+            return ::mlir::lumina::LMTensorType::get(getContext(), getShape(), elementType, getDeviceId());
+        }
+
+        LMTensorType clone() const {
+            return ::mlir::lumina::LMTensorType::get(getContext(), getShape(), getElementType(), getDeviceId());
+        }
+    }];
 
 }
 
