@@ -32,4 +32,9 @@ target_link_libraries(mira PRIVATE
     MLIRLuminaDialect
     MLIRGPUDialect
     MLIRFuncDialect
+    MLIRLinalgDialect
+    MLIRSCFDialect
+    MLIRTensorDialect
+    MLIRAffineDialect
+    MLIRArithDialect
 )

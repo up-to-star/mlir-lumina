@@ -16,12 +16,16 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "Dialect/Lumina/IR/LuminaTypes.h"
 #include "Dialect/Lumina/IR/LuminaAttrs.h"
 #include "Dialect/Lumina/IR/LuminaOps.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
+#include "Utils/File.h"
 
 static const char* const KEntryPoint = "main";
 static const char* const KDPAttrName = "dp_attr";
@@ -204,7 +208,7 @@ void test_builtin_attr() {
 void test_myattrs() {
     mlir::DialectRegistry registry;
     mlir::MLIRContext context(registry);
-    auto dialect = context.getOrLoadDialect<mlir::lumina::LuminaDialect>();
+    context.getOrLoadDialect<mlir::lumina::LuminaDialect>();
     auto nchw = mlir::lumina::Layout::NCHW;
     llvm::outs() << "NCHW: " << mlir::lumina::stringifyLayout(nchw) << "\n";
     auto nchw_attr = mlir::lumina::LayoutAttr::get(&context, nchw);
@@ -366,27 +370,65 @@ void test_interface() {
     module->dump();
 }
 
+void IR_Struct() {
+  const char* ir =
+      R"(func.func @insertion_point_outside_loop(%t : tensor<?xf32>, %sz : index,
+                                        %idx : index) -> (tensor<?xf32>) {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c5 = arith.constant 5 : index
+  %blank = tensor.empty() : tensor<5xf32>
+
+  %r = scf.for %iv = %c0 to %sz step %c5 iter_args(%bb = %t) -> (tensor<?xf32>) {
+    %iv_i32 = arith.index_cast %iv : index to i32
+    %f = arith.sitofp %iv_i32 : i32 to f32
+
+    %filled = linalg.fill ins(%f : f32) outs(%blank : tensor<5xf32>) -> tensor<5xf32>
+
+    %inserted = tensor.insert_slice %filled into %bb[%idx][5][1] : tensor<5xf32> into tensor<?xf32>
+    scf.yield %inserted : tensor<?xf32>
+  }
+  return %r : tensor<?xf32>
+})";
+  auto context = mlir::MLIRContext();
+  context.getOrLoadDialect<mlir::func::FuncDialect>();
+  context.getOrLoadDialect<mlir::arith::ArithDialect>();
+  context.getOrLoadDialect<mlir::affine::AffineDialect>();
+  context.getOrLoadDialect<mlir::linalg::LinalgDialect>();
+  context.getOrLoadDialect<mlir::scf::SCFDialect>();
+  mlir::OwningOpRef<mlir::ModuleOp> module;
+  if (mlir::utils::file::ParseStr<mlir::ModuleOp>(context, module, ir).failed())
+    llvm::outs() << " parse ir string failed!\n";
+  auto file = std::filesystem::current_path() / "ir_struct.mlir";
+  if (mlir::utils::file::PrintToFile(module.get(), file.c_str()).failed()) {
+    llvm::outs() << "print module error!";
+  }
+}
+
 int main() {
-    std::cout << "testing dialect" << std::endl;
-    test_dialect();
-    std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing builtin types" << std::endl;
-    test_builtin_types();
-    std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing my types" << std::endl;
-    test_mytypes();
-    std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing builtin attr" << std::endl;
-    test_builtin_attr();
-    std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing my attr" << std::endl;
-    test_myattrs();
-    std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing ops" << std::endl;
-    test_ops();
-    std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing interface" << std::endl;
-    test_interface();
+    // std::cout << "testing dialect" << std::endl;
+    // test_dialect();
+    // std::cout << "----------------------------------" << std::endl;
+    // std::cout << "testing builtin types" << std::endl;
+    // test_builtin_types();
+    // std::cout << "----------------------------------" << std::endl;
+    // std::cout << "testing my types" << std::endl;
+    // test_mytypes();
+    // std::cout << "----------------------------------" << std::endl;
+    // std::cout << "testing builtin attr" << std::endl;
+    // test_builtin_attr();
+    // std::cout << "----------------------------------" << std::endl;
+    // std::cout << "testing my attr" << std::endl;
+    // test_myattrs();
+    // std::cout << "----------------------------------" << std::endl;
+    // std::cout << "testing ops" << std::endl;
+    // test_ops();
+    // std::cout << "----------------------------------" << std::endl;
+    // std::cout << "testing interface" << std::endl;
+    // test_interface();
+    // std::cout << "----------------------------------" << std::endl;
+    std::cout << "ir struct" << std::endl;
+    IR_Struct();
     std::cout << "----------------------------------" << std::endl;
     return 0;
 }
