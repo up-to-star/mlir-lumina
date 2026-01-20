@@ -28,9 +28,10 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 #include "Utils/File.h"
+#include "Utils/Key.h"
 
-static const char* const KEntryPoint = "main";
-static const char* const KDPAttrName = "dp_attr";
+// static const char* const KEntryPoint = "main";
+// static const char* const KDPAttrName = "dp_attr";
 
 void test_dialect() {
     mlir::DialectRegistry registry;
@@ -305,7 +306,7 @@ mlir::ModuleOp getModule(mlir::OpBuilder& builder) {
         mlir::lumina::LMTensorType::get(context, dy_shape, f32, 0);
     auto func_type =
         mlir::FunctionType::get(context, {dy_tensor_type}, {dy_tensor_type});
-    auto func = builder.create<mlir::func::FuncOp>(loc, KEntryPoint, func_type);
+    auto func = mlir::func::FuncOp::create(builder, loc, KEntryPointName, func_type);
     func->setAttr(KDPAttrName,
                   mlir::lumina::DataParallelismAttr::get(context, 2));
 
