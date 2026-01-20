@@ -2,6 +2,7 @@
 #include <memory>
 #include "Dialect/Lumina/IR/LuminaDialect.h"
 #include "Dialect/Lumina/IR/LuminaEnums.h"
+#include "Dialect/Lumina/Transforms/Passes.h"
 #include "Interfaces/DistributeParallelismInterfaces.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -24,6 +25,7 @@
 #include "Dialect/Lumina/IR/LuminaOps.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 #include "Utils/File.h"
 
@@ -311,8 +313,8 @@ mlir::ModuleOp getModule(mlir::OpBuilder& builder) {
     builder.setInsertionPointToStart(block);
     // Softmax Op
     mlir::Value softmax_op =
-        builder.create<mlir::lumina::SoftmaxOp>(loc, block->getArgument(0), 1);
-    softmax_op = builder.create<mlir::lumina::SoftmaxOp>(loc, softmax_op, 1);
+        mlir::lumina::SoftmaxOp::create(builder, loc, block->getArgument(0), 1);
+    softmax_op = mlir::lumina::SoftmaxOp::create(builder, loc, softmax_op, 1);
     builder.create<mlir::func::ReturnOp>(loc, mlir::ValueRange{softmax_op});
     return module;
 }
@@ -371,8 +373,8 @@ void test_interface() {
 }
 
 void IR_Struct() {
-  const char* ir =
-      R"(func.func @insertion_point_outside_loop(%t : tensor<?xf32>, %sz : index,
+    const char* ir =
+        R"(func.func @insertion_point_outside_loop(%t : tensor<?xf32>, %sz : index,
                                         %idx : index) -> (tensor<?xf32>) {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
@@ -390,19 +392,43 @@ void IR_Struct() {
   }
   return %r : tensor<?xf32>
 })";
-  auto context = mlir::MLIRContext();
-  context.getOrLoadDialect<mlir::func::FuncDialect>();
-  context.getOrLoadDialect<mlir::arith::ArithDialect>();
-  context.getOrLoadDialect<mlir::affine::AffineDialect>();
-  context.getOrLoadDialect<mlir::linalg::LinalgDialect>();
-  context.getOrLoadDialect<mlir::scf::SCFDialect>();
-  mlir::OwningOpRef<mlir::ModuleOp> module;
-  if (mlir::utils::file::ParseStr<mlir::ModuleOp>(context, module, ir).failed())
-    llvm::outs() << " parse ir string failed!\n";
-  auto file = std::filesystem::current_path() / "ir_struct.mlir";
-  if (mlir::utils::file::PrintToFile(module.get(), file.c_str()).failed()) {
-    llvm::outs() << "print module error!";
-  }
+    auto context = mlir::MLIRContext();
+    context.getOrLoadDialect<mlir::func::FuncDialect>();
+    context.getOrLoadDialect<mlir::arith::ArithDialect>();
+    context.getOrLoadDialect<mlir::affine::AffineDialect>();
+    context.getOrLoadDialect<mlir::linalg::LinalgDialect>();
+    context.getOrLoadDialect<mlir::scf::SCFDialect>();
+    mlir::OwningOpRef<mlir::ModuleOp> module;
+    if (mlir::utils::file::ParseStr<mlir::ModuleOp>(context, module, ir)
+            .failed())
+        llvm::outs() << " parse ir string failed!\n";
+    auto file = std::filesystem::current_path() / "ir_struct.mlir";
+    if (mlir::utils::file::PrintToFile(module.get(), file.c_str()).failed()) {
+        llvm::outs() << "print module error!";
+    }
+}
+
+void test_pass() {
+    mlir::DialectRegistry registry;
+    mlir::MLIRContext context(registry);
+    context.getOrLoadDialect<mlir::lumina::LuminaDialect>();
+    context.getOrLoadDialect<mlir::func::FuncDialect>();
+    mlir::OpBuilder builder(&context);
+    auto loc = builder.getUnknownLoc();
+    auto module = getModule(builder);
+    mlir::PassManager pm(&context);
+    mlir::lumina::MarkDistributeParallelParametersPassOptions
+        mark_distribute_parallel_option{.DPNums = 3, .TPNums = 1};
+    pm.addPass(mlir::lumina::createMarkDistributeParallelParametersPass(
+        mark_distribute_parallel_option));
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::lumina::createApplyDistributeTransformPass());
+    module->dump();
+    if (pm.run(module).failed()) {
+        llvm::outs() << "run pass error!\n";
+    }
+    llvm::outs() << "after pass:\n";
+    module->dump();
 }
 
 int main() {
@@ -427,8 +453,11 @@ int main() {
     // std::cout << "testing interface" << std::endl;
     // test_interface();
     // std::cout << "----------------------------------" << std::endl;
-    std::cout << "ir struct" << std::endl;
-    IR_Struct();
+    // std::cout << "ir struct" << std::endl;
+    // IR_Struct();
+    // std::cout << "----------------------------------" << std::endl;
+    std::cout << "testing pass" << std::endl;
+    test_pass();
     std::cout << "----------------------------------" << std::endl;
     return 0;
 }

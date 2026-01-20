@@ -30,6 +30,7 @@ add_subdirectory(src)
 target_link_libraries(mira PRIVATE
     MLIRIR
     MLIRLuminaDialect
+    MLIRLuminaTransforms
     MLIRGPUDialect
     MLIRFuncDialect
     MLIRLinalgDialect
