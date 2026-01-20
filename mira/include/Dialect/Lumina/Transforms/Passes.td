@@ -23,3 +23,11 @@ def ApplyDistributeTransformPass : Pass<"apply-distribute-transforms", "::mlir::
     let dependentDialects = ["::mlir::lumina::LuminaDialect", "::mlir::tensor::TensorDialect"];
     let constructor = "mlir::lumina::createApplyDistributeTransformPass()";
 }
+
+def DeviceRegionFusionPass : Pass<"device-region-fusion", "::mlir::func::FuncOp"> {
+    let summary = "相同device的计算合并";
+    let description = [{
+        "相同device的计算合并";
+    }];
+    let dependentDialects = ["::mlir::lumina::LuminaDialect", "::mlir::tensor::TensorDialect"];
+}

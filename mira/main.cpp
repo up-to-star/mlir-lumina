@@ -306,7 +306,8 @@ mlir::ModuleOp getModule(mlir::OpBuilder& builder) {
         mlir::lumina::LMTensorType::get(context, dy_shape, f32, 0);
     auto func_type =
         mlir::FunctionType::get(context, {dy_tensor_type}, {dy_tensor_type});
-    auto func = mlir::func::FuncOp::create(builder, loc, KEntryPointName, func_type);
+    auto func =
+        mlir::func::FuncOp::create(builder, loc, KEntryPointName, func_type);
     func->setAttr(KDPAttrName,
                   mlir::lumina::DataParallelismAttr::get(context, 2));
 
@@ -432,6 +433,34 @@ void test_pass() {
     module->dump();
 }
 
+void test_pattern_rewrite() {
+    mlir::DialectRegistry registry;
+    // 初始化上下文环境
+    mlir::MLIRContext context(registry);
+    context.disableMultithreading(true);
+    // 加载/注册方言
+    context.getOrLoadDialect<mlir::lumina::LuminaDialect>();
+    context.getOrLoadDialect<mlir::func::FuncDialect>();
+    mlir::OpBuilder builder(&context);
+    auto loc = builder.getUnknownLoc();
+    auto module = getModule(builder);
+    mlir::PassManager pm(&context);
+    mlir::lumina::MarkDistributeParallelParametersPassOptions
+        mark_distribute_parallel_option{.DPNums = 3, .TPNums = 1};
+    pm.addPass(mlir::lumina::createMarkDistributeParallelParametersPass(
+        mark_distribute_parallel_option));
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::lumina::createApplyDistributeTransformPass());
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::lumina::createDeviceRegionFusionPass());
+    module->dump();
+    if (pm.run(module).failed()) {
+        llvm::outs() << "run pass error!\n";
+    };
+    llvm::outs() << "after pass:\n";
+    module->dump();
+}
+
 int main() {
     // std::cout << "testing dialect" << std::endl;
     // test_dialect();
@@ -457,8 +486,12 @@ int main() {
     // std::cout << "ir struct" << std::endl;
     // IR_Struct();
     // std::cout << "----------------------------------" << std::endl;
-    std::cout << "testing pass" << std::endl;
-    test_pass();
+    // std::cout << "testing pass" << std::endl;
+    // test_pass();
+    // std::cout << "----------------------------------" << std::endl;
+
+    std::cout << "testing pattern rewrite" << std::endl;
+    test_pattern_rewrite();
     std::cout << "----------------------------------" << std::endl;
     return 0;
 }

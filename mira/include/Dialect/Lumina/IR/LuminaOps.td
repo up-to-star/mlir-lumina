@@ -1,5 +1,12 @@
 include "Dialect/Lumina/IR/LuminaAttrs.td"
 include "Dialect/Lumina/IR/LuminaConstraints.td"
+include "mlir/IR/OpAsmInterface.td"
+include "Interfaces/FusionRegionInterfaces.td"
+include "mlir/IR/SymbolInterfaces.td"
+include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/FunctionInterfaces.td"
+include "mlir/Interfaces/ControlFlowInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
 
 class Lumina_Op<string mnemonic, list<Trait> traits = []>
     : Op<LuminaDialect, mnemonic, traits> {
@@ -36,7 +43,7 @@ class Lumina_ElewiseUnaryOp<string mnemonic, Type OperandType, Type resultType =
 class Lumina_ElewiseBinaryOp<string mnemonic, Type OperandType, Type resultType = OperandType, list<Trait> traits = [], dag attributes = (ins)> :
     Lumina_BinaryOp<mnemonic, OperandType, resultType, [DeclareOpInterfaceMethods<SupportedDataParallelismOp>] # traits, attributes>;
 
-def Lumina_ConstOp : Lumina_Op<"const", []> {
+def Lumina_ConstOp : Lumina_Op<"const", [Pure]> {
     let arguments = (ins
         ElementsAttr: $value);
 
@@ -45,7 +52,7 @@ def Lumina_ConstOp : Lumina_Op<"const", []> {
 }
 
 def Lumina_SoftmaxOp : Lumina_UnaryOp<"softmax", AnyLMTensor, AnyLMTensor, 
-                    [DeclareOpInterfaceMethods<SupportedDataParallelismOp, ["applyDataParallelism", "supportedDataParallelism"]>], (ins I64Attr: $axis)> {
+                    [DeclareOpInterfaceMethods<SupportedDataParallelismOp, ["applyDataParallelism", "supportedDataParallelism"]>, Pure], (ins I64Attr: $axis)> {
     let hasVerifier = 1;
 
     let builders = [
@@ -79,7 +86,7 @@ def Lumina_AllToAllOp : Lumina_Op<"all_to_all", []> {
     );
 }
 
-def Lumina_BufferOp : Lumina_Op<"buffer", []> {
+def Lumina_BufferOp : Lumina_Op<"buffer", [Pure]> {
     let description = "将多个device_id的tensor合并成一个buffer";
     let arguments = (ins
         Variadic<AnyLMTensor>: $tensors
@@ -102,7 +109,7 @@ def Lumina_BufferOp : Lumina_Op<"buffer", []> {
     ];
 }
 
-def Lumina_BufferCastOp : Lumina_Op<"buffer_cast", []> {
+def Lumina_BufferCastOp : Lumina_Op<"buffer_cast", [Pure]> {
     let description = "对数据切分的标记";
     let arguments = (ins
        Variadic<LMTensorOrBuffer>: $inputs,
@@ -112,7 +119,7 @@ def Lumina_BufferCastOp : Lumina_Op<"buffer_cast", []> {
     let hasVerifier = 1;
 }
 
-def Lumina_GetTensorOp : Lumina_Op<"get_tensor", []> {
+def Lumina_GetTensorOp : Lumina_Op<"get_tensor", [Pure]> {
     let description = "从buffer中获取tensor";
     let arguments = (ins
         AnyBuffer: $buffer,
@@ -127,4 +134,31 @@ def Lumina_GetTensorOp : Lumina_Op<"get_tensor", []> {
 def Lumina_PrintOp : Lumina_Op<"print", []> {
     let arguments = (ins
         AnyType: $input);
+}
+
+def Lumina_DeviceKernelOp : Lumina_Op<"device_kernel", 
+    [DeclareOpInterfaceMethods<FusionRegionOpInterface, ["FusionOps"]>, AffineScope, AutomaticAllocationScope, IsolatedFromAbove, OpAsmOpInterface]> {
+    let arguments = (ins
+        SymbolNameAttr: $sym_name,
+        I64Attr: $device_id,
+        Variadic<AnyType>: $args
+    );
+    let regions = (region SizedRegion<1>: $region);
+
+    let results = (outs
+        Variadic<AnyType>: $results);
+    let hasVerifier = 1;
+}
+
+def Lumina_ReturnOp : Lumina_Op<"return", [Pure, HasParent<"DeviceKernelOp">, ReturnLike, Terminator]> {
+    let summary = "return operation";
+
+    let arguments = (ins Variadic<AnyType>: $operands);
+
+    let builders = [OpBuilder<(ins), [{
+        build($_builder, $_state, ::mlir::ValueRange());
+    }]>];
+
+    let hasVerifier = 0;
+    let assemblyFormat = "attr-dict ($operands^ `:` type($operands))?";
 }

@@ -38,4 +38,5 @@ target_link_libraries(mira PRIVATE
     MLIRTensorDialect
     MLIRAffineDialect
     MLIRArithDialect
+    MLIRPass
 )
