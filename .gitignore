@@ -2,3 +2,4 @@
 llvm-project/
 mira/build/
 install/
+mira/.cache/
