@@ -14,6 +14,7 @@ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
 
 include(TableGen)
+include(MLIRConfig)
 include(AddLLVM)
 include(AddMLIR)
 include(HandleLLVMOptions)

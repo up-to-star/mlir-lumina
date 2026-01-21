@@ -7,6 +7,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 
+#define DEBUG_TYPE "apply-distribute-transform"
+
 namespace mlir::lumina {
 #define GEN_PASS_DEF_APPLYDISTRIBUTETRANSFORMPASS
 #include "Dialect/Lumina/Transforms/Passes.h.inc"

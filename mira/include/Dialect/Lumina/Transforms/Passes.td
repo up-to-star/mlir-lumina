@@ -15,7 +15,7 @@ def MarkDistributeParallelParametersPass : Pass<"mark-distribute-parallel-parame
     ];
 }
 
-def ApplyDistributeTransformPass : Pass<"apply-distribute-transforms", "::mlir::func::FuncOp"> {
+def ApplyDistributeTransformPass : Pass<"apply-distribute-transform", "::mlir::func::FuncOp"> {
     let summary = "根据标记的并行参数进行变换";
     let description = [{
         "根据标记的并行参数进行变换";

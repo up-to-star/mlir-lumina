@@ -5,6 +5,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "Utils/Key.h"
 
+#define DEBUG_TYPE "mark-distribute-parallel-parameters"
+
 namespace mlir::lumina {
 #define GEN_PASS_DEF_MARKDISTRIBUTEPARALLELPARAMETERSPASS
 #include "Dialect/Lumina/Transforms/Passes.h.inc"

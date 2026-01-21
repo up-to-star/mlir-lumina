@@ -28,6 +28,8 @@
 
 #include <map>
 
+#define DEBUG_TYPE "device-region-fusion"
+
 namespace mlir::lumina {
 #define GEN_PASS_DEF_DEVICEREGIONFUSIONPASS
 #include "Dialect/Lumina/Transforms/Passes.h.inc"
@@ -46,7 +48,7 @@ static inline llvm::SmallString<4> getFusionName(
         for (auto type : op->getOperandTypes()) {
             if (auto shaped = llvm::dyn_cast_or_null<ShapedType>(type)) {
                 for (auto index : llvm::index_range(0, shaped.getRank())) {
-                    if (shaped.isDynamic(index)) {
+                    if (shaped.isDynamicDim(index)) {
                         name.append("d_");
                     } else {
                         name.append(llvm::to_string(shaped.getDimSize(index)));
